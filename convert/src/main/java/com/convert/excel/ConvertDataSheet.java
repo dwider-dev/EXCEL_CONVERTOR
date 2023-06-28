@@ -115,4 +115,10 @@ public class ConvertDataSheet {
     public int getRowLength(){
         return rowLength;
     }
+
+    public Object[] convertRow(){
+        Object[] row = new Object[columnLength];
+
+        return row;
+    }
 }
