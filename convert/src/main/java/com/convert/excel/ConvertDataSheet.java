@@ -9,8 +9,14 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Excel 파일의 각 라인을 읽어들여 분석 로직에따라 변환한다.
@@ -229,21 +235,172 @@ public class ConvertDataSheet {
      * @return
      */
     private Object[] procRow(Object[] row, String convertFunc, String outFile){
-        String[] convertStr = convertFunc.split(":");
-        boolean firstFlagNone = false;
+        String[] convertCols = convertFunc.split(",");
 
-        if(convertStr.length != 3){
+        if(convertCols.length <= 0){
             log.error("_OUTPUT_COLUMN_DATA 옵션 설정 오류");
             return null;
         }
 
-        // 첫번째 필드는 NONE 여부만 체크
-        if(convertStr[0].equals(OPT_NONE)){
+        for(String options : convertCols){
+            String[] args = options.split(":");
+
+            // 각 컬럼 설정 당 옵션은 3개로 구성되어있어야 한다.
+            if(args.length != 3){
+                log.error("_OUTPUT_COLUMN_DATA 옵션 설정 오류");
+                return null;
+            }
+
+            // First option
+            Object targetValue = null;
+            for(int i = 0 ; i < columnLength ; i++) {
+                // NONE 옵션의 경우 동작 없음
+                if(args[0].equals(OPT_NONE)){
+                    break;
+                }
+
+                if(args[0].equals(columnTitle[i])) {
+                    targetValue = row[i];
+                }
+            }
+
+            // Second option
+
+            /*
+            OPT_NUMBERING
+            OPT_STRING
+            OPT_DATE_YYMM
+            OPT_DATE_YYYYMMDD
+            OPT_NOTE_CONVERT_CARNUM
+            OPT_NOTE_CONVERT_CARNAME
+            OPT_NOTE_CONVERT_OIL
+            OPT_NOTE_CONVERT_INS
+            OPT_NOTE_CONVERT_PAR
+            OPT_NOTE_CONVERT_OIL_INS_PAR
+             */
+            Object output;
+            switch (args[1]) {
+                case OPT_NUMBERING:
+                    break;
+                case OPT_STRING:
+                    // 원본 엑셀에서 가져온 데이터를 그대로 입력한다.
+                    output = targetValue;
+                    break;
+                case OPT_DATE_YYMM:
+                    output = transDate(String.valueOf(targetValue), "yy/MM");
+                    break;
+                case OPT_DATE_YYYYMMDD:
+                    output = transDate(String.valueOf(targetValue), "yyyy-MM-dd");
+                    break;
+                case OPT_NOTE_CONVERT_CARNUM:
+                    output = findCarNum(String.valueOf(targetValue));
+                    break;
+                case OPT_NOTE_CONVERT_CARNAME:
+                    output = findCarName(String.valueOf(targetValue));
+                    break;
+                case OPT_NOTE_CONVERT_OIL:
+                    break;
+                case OPT_NOTE_CONVERT_INS:
+                    break;
+                case OPT_NOTE_CONVERT_PAR:
+                    break;
+                case OPT_NOTE_CONVERT_OIL_INS_PAR:
+                    break;
+                default:
+                    break;
+            }
+
 
         }
 
-        return row;
+
+        return null;
     }
 
+    /**
+     * 원본 데이터의 날짜 형식을 지정한 양식으로 변경한다.
+     *
+     * @param dateStr
+     * @param format
+     * @return
+     */
+    private String transDate(String dateStr, String format){
+        String formatString = dateStr;
+        DateFormat dfInput = new SimpleDateFormat("yyyyMMdd");
+        DateFormat df = new SimpleDateFormat(format);
+
+        try {
+            formatString = df.format(dfInput.parse(dateStr));
+        } catch (ParseException e) {
+            log.error("날짜 형식 변환 오류 발생 : " + dateStr);
+        }
+
+        return formatString;
+    }
+
+    private static String findCarNum(String data) {
+        String format = "(\\d{2,3}\\D\\d{4})";
+        Pattern pattern = Pattern.compile(format);
+        Matcher matcher = pattern.matcher(data);
+
+        if(matcher.find()) {
+            return matcher.group();
+        }
+
+        return "";
+    }
+
+    private static String findCarName(String data) {
+        String tempStr = data;
+
+
+        // 전화번호 제거
+        Pattern pattern = Pattern.compile("(\\d{3}.\\d{4}.\\d{4})");
+        Matcher matcher = pattern.matcher(tempStr);
+
+        if(matcher.find()) {
+            tempStr = matcher.replaceAll("");
+        }
+
+        // 차량번호 제거
+        pattern = Pattern.compile("(\\d{2,3}\\D\\d{4})");
+        matcher = pattern.matcher(tempStr);
+
+        if(matcher.find()) {
+            tempStr = matcher.replaceAll("");
+        }
+
+        // 추가금액 제거
+        pattern = Pattern.compile("(.[주,보,주차,주유,보험]\\d+.\\d)");
+        matcher = pattern.matcher(tempStr);
+
+        if(matcher.find()) {
+            tempStr = matcher.replaceAll("");
+        }
+
+        // 예약 문구 제거
+        String[] expectStrs = {"출발", "도착", "반차", "핸들", "주차", "주유", "픽업", "청불", "보험", "경유", "전달"};
+
+        for(String expect : expectStrs){
+
+            if(tempStr.indexOf(expect) >= 0){
+                String tempRm = tempStr.substring(tempStr.indexOf(expect));
+                tempRm = tempRm.substring(0, tempRm.indexOf("/") >= 0 ? tempRm.indexOf("/") : tempRm.length());
+                tempStr = tempStr.replaceAll(tempRm, "");
+            }
+
+        }
+
+        tempStr = tempStr.replaceAll("/", "");
+
+        return tempStr.trim();
+    }
+
+
+
+
+    public static void main(String args[]){
+        System.out.println(findCarName("소울/16우6955/주2.0/"));
+    }
 
 }
