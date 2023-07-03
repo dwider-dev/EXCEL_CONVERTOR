@@ -51,7 +51,7 @@ public class ConvertDataSheet {
     private final String OPT_NONE = "$NONE";
     private final String OPT_NUMBERING = "$NUMBERING";
     private final String OPT_STRING = "$STRING";
-    private final String OPT_DATE_YYMM = "$DATE_YYMM";
+    private final String OPT_DATE_MMDD = "$DATE_MMDD";
     private final String OPT_DATE_YYYYMMDD = "$DATE_YYYYMMDD";
     private final String OPT_NOTE_CONVERT_CARNUM = "$NOTE_CONVERT_CARNUM";
     private final String OPT_NOTE_CONVERT_CARNAME = "$NOTE_CONVERT_CARNAME";
@@ -153,6 +153,9 @@ public class ConvertDataSheet {
         return rowLength;
     }
 
+    /**
+     * 읽어들인 파일의 전체 Row 를 분석 및 변환 한다.
+     */
     public void convertRow(){
         Object[] row = new Object[columnLength];
 
@@ -236,12 +239,19 @@ public class ConvertDataSheet {
      */
     private Object[] procRow(Object[] row, String convertFunc, String outFile){
         String[] convertCols = convertFunc.split(",");
+        Object[] procRow = new Object[convertCols.length];
 
         if(convertCols.length <= 0){
             log.error("_OUTPUT_COLUMN_DATA 옵션 설정 오류");
             return null;
         }
 
+        /*
+        * 변환 하고자하는 결과 파일의 컬럼 수 만큼 처리
+        * 원본 엑셀 데이터의 특정 컬럼 값을 가져와 옵션에 따른 후 처리를 진행하여 Output 파일에 기록하기 위한 데이터 분석 및 처리 부분
+        *
+        * */
+        int j = 0;
         for(String options : convertCols){
             String[] args = options.split(":");
 
@@ -278,16 +288,18 @@ public class ConvertDataSheet {
             OPT_NOTE_CONVERT_PAR
             OPT_NOTE_CONVERT_OIL_INS_PAR
              */
-            Object output;
+            Object output = null;
             switch (args[1]) {
                 case OPT_NUMBERING:
+                    // 파일 기록 시 동작할 수 있도록 옵션을 그대로 입력
+                    output = OPT_NUMBERING;
                     break;
                 case OPT_STRING:
                     // 원본 엑셀에서 가져온 데이터를 그대로 입력한다.
                     output = targetValue;
                     break;
-                case OPT_DATE_YYMM:
-                    output = transDate(String.valueOf(targetValue), "yy/MM");
+                case OPT_DATE_MMDD:
+                    output = transDate(String.valueOf(targetValue), "MM/dd");
                     break;
                 case OPT_DATE_YYYYMMDD:
                     output = transDate(String.valueOf(targetValue), "yyyy-MM-dd");
@@ -310,14 +322,24 @@ public class ConvertDataSheet {
                     break;
             }
 
+            // Third option
+            procRow[j] = output;
+            j++;
 
-        }
+
+        } // End proc row
+
+
+        // Write file
+        writeFile(procRow, new File(ReadProperties.getProperty("OUTPUT_EXCEL_PATH") + "/" + outFile));
 
 
         return null;
     }
 
     /**
+     * 기능 옵션 : $DATE_MMDD, $DATE_YYYYMMDD
+     * <br>
      * 원본 데이터의 날짜 형식을 지정한 양식으로 변경한다.
      *
      * @param dateStr
@@ -338,7 +360,15 @@ public class ConvertDataSheet {
         return formatString;
     }
 
-    private static String findCarNum(String data) {
+    /**
+     * 기능 옵션 : $NOTE_CONVERT_CARNUM
+     * <br>
+     * 지정 필드에서 차량번호에 해당하는 값을 찾아준다.
+     *
+     * @param data
+     * @return
+     */
+    private String findCarNum(String data) {
         String format = "(\\d{2,3}\\D\\d{4})";
         Pattern pattern = Pattern.compile(format);
         Matcher matcher = pattern.matcher(data);
@@ -350,7 +380,15 @@ public class ConvertDataSheet {
         return "";
     }
 
-    private static String findCarName(String data) {
+    /**
+     * 기능 옵션 : $NOTE_CONVERT_CARNAME
+     * <br>
+     * 지정 필드에서 차량명에 해당하는 값을 찾아준다.
+     *
+     * @param data
+     * @return
+     */
+    private String findCarName(String data) {
         String tempStr = data;
 
 
@@ -397,10 +435,78 @@ public class ConvertDataSheet {
     }
 
 
+    private void writeFile(Object[] row, File file){
+        try {
+            XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(file));
+            XSSFSheet outputSheet;
+
+            if(workbook.getNumberOfSheets() <= 0){
+                log.debug("New file : " + file.getName());
+                outputSheet = workbook.createSheet();
+            } else{
+                outputSheet = workbook.getSheetAt(0);
+            }
+
+            int outFileRowCnt = outputSheet.getPhysicalNumberOfRows();
+
+            // Write titles
+            if(outFileRowCnt <= 0){
+
+                // Write titles
+                // Write to first row
+                XSSFRow titleRow = outputSheet.createRow(0);
+
+                for(int i = 0 ; i < columnTitle.length ; i++){
+                    Object cellData = columnTitle[i];
+                    XSSFCell cell = titleRow.createCell(i);
+
+                    cell.setCellValue(String.valueOf(cellData));
+
+                }
+                outFileRowCnt++;
+
+            }// End write titles
+
+            // Write row data
+            for(int i = 0 ; i < row.length ; i++){
+                Object cellData = row[i];
+                XSSFRow writeRow = outputSheet.createRow(outFileRowCnt);
+                XSSFCell cell = writeRow.createCell(i);
+
+                // Numbering 기능 사용시 값 치환
+                if(cellData.equals(OPT_NUMBERING)){
+                    cellData = outFileRowCnt;
+                }
+
+                if(cellData instanceof String){
+                    cell.setCellValue(String.valueOf(cellData));
+                } else if (cellData instanceof Integer) {
+                    cell.setCellValue(Integer.parseInt(String.valueOf(cellData)));
+                } else if (cellData instanceof Double) {
+                    cell.setCellValue(Double.parseDouble(String.valueOf(cellData)));
+                } else if (cellData instanceof Float) {
+                    cell.setCellValue(Float.parseFloat(String.valueOf(cellData)));
+                } else{
+                    cell.setCellValue(String.valueOf(cellData));
+                }
+
+            }
+            // End write row data
+
+            workbook.write(new FileOutputStream(file));
+
+
+
+        } catch (IOException e) {
+            log.error("File 기록 중 오류 발생", e);
+        }
+
+
+    }
+
 
 
     public static void main(String args[]){
-        System.out.println(findCarName("소울/16우6955/주2.0/"));
     }
 
 }
