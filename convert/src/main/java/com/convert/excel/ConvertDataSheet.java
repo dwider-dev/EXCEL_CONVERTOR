@@ -13,7 +13,6 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -183,7 +182,7 @@ public class ConvertDataSheet {
              */
 
             // read column
-            for(int j = 0 ; j < columnLength ; j++){
+            for(int j = 0 ; j < targets.length ; j++){
                 if(equalIndex(columnTitle, row, stdValue[j])){
 
                     log.debug("[" + j + "] " + stdValue[j] + " - 분류 - OUTPUT - " +  outputFileName[j]);
@@ -240,6 +239,7 @@ public class ConvertDataSheet {
     private Object[] procRow(Object[] row, String convertFunc, String outFile){
         String[] convertCols = convertFunc.split(",");
         Object[] procRow = new Object[convertCols.length];
+        String[] outColumns = new String[convertCols.length];
 
         if(convertCols.length <= 0){
             log.error("_OUTPUT_COLUMN_DATA 옵션 설정 오류");
@@ -322,8 +322,11 @@ public class ConvertDataSheet {
                     break;
             }
 
-            // Third option
             procRow[j] = output;
+
+            // Third option
+            outColumns[j] = args[2];
+
             j++;
 
 
@@ -331,7 +334,7 @@ public class ConvertDataSheet {
 
 
         // Write file
-        writeFile(procRow, new File(ReadProperties.getProperty("OUTPUT_EXCEL_PATH") + "/" + outFile));
+        writeFile(procRow, outColumns, new File(ReadProperties.getProperty("OUTPUT_EXCEL_PATH") + "/" + outFile));
 
 
         return null;
@@ -434,8 +437,14 @@ public class ConvertDataSheet {
         return tempStr.trim();
     }
 
-
-    private void writeFile(Object[] row, File file){
+    /**
+     * 파일을 생성하고 변환된 Row를 기록한다.
+     *
+     * @param row
+     * @param outColumns
+     * @param file
+     */
+    private void writeFile(Object[] row, String[] outColumns, File file){
         try {
             XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(file));
             XSSFSheet outputSheet;
@@ -456,8 +465,8 @@ public class ConvertDataSheet {
                 // Write to first row
                 XSSFRow titleRow = outputSheet.createRow(0);
 
-                for(int i = 0 ; i < columnTitle.length ; i++){
-                    Object cellData = columnTitle[i];
+                for(int i = 0 ; i < outColumns.length ; i++){
+                    Object cellData = outColumns[i];
                     XSSFCell cell = titleRow.createCell(i);
 
                     cell.setCellValue(String.valueOf(cellData));
