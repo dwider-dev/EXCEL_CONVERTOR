@@ -2,6 +2,7 @@ package com.convert.common;
 
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Reader;
 import java.util.Properties;
 
@@ -11,23 +12,24 @@ import java.util.Properties;
  * 2023. 06. 27
  */
 public class ReadProperties {
-    private static String propFilePath = "resources/excel.properties";
+    private static String propFilePath = "excel.properties";
     private static Properties props = new Properties();
 
-    ReadProperties(){
+    private ReadProperties() {
     }
 
     public static String getProperty(String name) {
         String val = "";
 
         try {
-            Reader reader = new FileReader(propFilePath);
-            props.load(reader);
-
-            val = props == null ? "" :props.getProperty(name);
-
-            reader.close();
-        }catch(IOException e) {
+            InputStream inputStream = ReadProperties.class.getClassLoader().getResourceAsStream(propFilePath);
+            if (inputStream != null) {
+                Reader reader = new java.io.InputStreamReader(inputStream, java.nio.charset.StandardCharsets.UTF_8);
+                props.load(reader);
+                val = props.getProperty(name);
+                reader.close();
+            }
+        } catch (IOException e) {
             return "";
         }
 
