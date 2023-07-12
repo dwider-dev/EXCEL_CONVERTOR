@@ -19,11 +19,13 @@ public class ExcelConvertorMain {
         List<ConvertDataSheet> excelList = new ArrayList<ConvertDataSheet>();
 
         for(int i = 0 ; i < fileLen ; i++){
+            System.out.println("file Length ..  : " + fileLen);
             ConvertDataSheet excel = new ConvertDataSheet(ExcelReader.getFile(i));
             excelList.add(excel);
         }
 
         for(ConvertDataSheet excel : excelList){
+            System.out.println("excel");
             excel.convertRow();
         }
 

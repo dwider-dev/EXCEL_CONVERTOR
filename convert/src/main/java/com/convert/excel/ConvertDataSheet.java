@@ -8,12 +8,14 @@ import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import java.awt.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -69,7 +71,8 @@ public class ConvertDataSheet {
         columnLength  = 0;
         rowLength = 0;
 
-        List<Object[]> convertRows = new ArrayList<Object[]>();
+        convertRows = new ArrayList<Object[]>(); // 수정된 부분
+        rows = new ArrayList<Object[]>();
 
         try {
             XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(workFile));
@@ -103,13 +106,10 @@ public class ConvertDataSheet {
                 return;
             }
 
-            rows = new ArrayList<Object[]>();
-
             // Read row data
             // rows
-            for(int i = 1 ; i < rowLength - 1; i ++){
+            for(int i = 1 ; i < rowLength ; i ++){
                 row = sheet.getRow(i);
-
                 Object celObj[] = new Object[columnLength];
 
                 // cols
@@ -141,13 +141,11 @@ public class ConvertDataSheet {
                                 break;
                             default:
                         }
-                        rows.add(celObj);
                     }
                 }
-                // cols read end
-                // modify new data size
-                rowLength = rows.size();
+                rows.add(celObj);
             }
+            rowLength --;
         }catch (IOException e){
             log.error("읽기 파일에 문제가 있습니다. 다음 파일 : " + workFile.getName() , e);
         }
@@ -161,8 +159,7 @@ public class ConvertDataSheet {
      * 읽어들인 파일의 전체 Row 를 분석 및 변환 한다.
      */
     public void convertRow(){
-        Object[] row = new Object[columnLength];
-
+        System.out.println("convertRow");
         String[] targets = ReadProperties.getProperty("DISTRIBUTE_TARGETS").split(",");
         String[] outputFileName = new String[targets.length];
         String[] stdValue = new String[targets.length];
@@ -174,10 +171,11 @@ public class ConvertDataSheet {
             stdValue[i] = ReadProperties.getProperty(targets[i] + "_OUTPUT_STD_VALUE");
             columnData[i] = ReadProperties.getProperty(targets[i] + "_OUTPUT_COLUMN_DATA");
         }
-
         // read row
+        System.out.println(rowLength);
+        System.out.println(targets.length);
         for (int i = 0; i < rowLength; i++) {
-            row = rows.get(i);
+            Object[] row = rows.get(i);
 
             /*
              * 한 줄씩 분석
@@ -191,16 +189,12 @@ public class ConvertDataSheet {
                     log.debug("[" + j + "] " + stdValue[j] + " - 분류 - OUTPUT - " + outputFileName[j]);
                     Object[] convertRow = procRow(row, columnData[j], outputFileName[j]);
 
-                    // 오류 발생 시 중단
-                    if (convertRow == null) {
-                        return;
-                    }
-
                     convertRows.add(convertRow);
                     log.debug("처리 완료 => " + convertRow);
                 }
             } // column end
         } // row end
+
     }
 
 
@@ -213,21 +207,22 @@ public class ConvertDataSheet {
      * @param value
      * @return
      */
-    private boolean equalIndex(String[] column, Object[] row, String value){
-        if(value == null){
+    private boolean equalIndex(String[] column, Object[] row, String value) {
+        if (value == null) {
             return false;
         }
-        String strVal[] = value.split(":");
+        String[] strVal = value.split(":");
+        String columnName = strVal[0];
+        String columnValue = strVal[1];
+
         for (int i = 0; i < columnLength; i++) {
-            if(column[i].equals(strVal[0])){
-                for (int j = 0; j < row.length; j++) {
-                    if(String.valueOf(row[j]).equals(strVal[1])){
-                        return true;
-                    }
+            if (column[i].equals(columnName)) {
+                Object cellValue = row[i];
+                if (cellValue != null && String.valueOf(cellValue).equals(columnValue)) {
+                    return true;
                 }
             }
         }
-
         return false;
     }
 
@@ -241,7 +236,7 @@ public class ConvertDataSheet {
      */
     private Object[] procRow(Object[] row, String convertFunc, String outFile){
         String[] convertCols = convertFunc.split(",");
-        Object[] procRow = new Object[convertCols.length];
+        Object[] procRow = new Object[convertCols.length];  // 크기를 설정하여 배열 초기화
         String[] outColumns = new String[convertCols.length];
 
         if(convertCols.length <= 0){
@@ -340,7 +335,7 @@ public class ConvertDataSheet {
         writeFile(procRow, outColumns, new File(ReadProperties.getProperty("OUTPUT_EXCEL_PATH") + "/" + outFile));
 
 
-        return null;
+        return procRow;
     }
 
     /**
@@ -439,6 +434,10 @@ public class ConvertDataSheet {
         tempStr = tempStr.replaceAll("/", "");
 
         return tempStr.trim();
+    }
+    private String findOil(String data){
+            
+        return "";
     }
 
     /**
