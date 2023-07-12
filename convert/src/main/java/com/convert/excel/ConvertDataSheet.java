@@ -14,6 +14,7 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -353,11 +354,12 @@ public class ConvertDataSheet {
      */
     private String transDate(String dateStr, String format){
         String formatString = dateStr;
-        DateFormat dfInput = new SimpleDateFormat("yyyyMMdd");
+        DateFormat dfInput = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         DateFormat df = new SimpleDateFormat(format);
 
         try {
-            formatString = df.format(dfInput.parse(dateStr));
+            Date date = dfInput.parse(dateStr);
+            formatString = df.format(date);
         } catch (ParseException e) {
             log.error("날짜 형식 변환 오류 발생 : " + dateStr);
         }
@@ -506,11 +508,9 @@ public class ConvertDataSheet {
             workbook.write(fos);
             fos.close();
 
-            // Close the workbook
         } catch (IOException e) {
             log.error("File 기록 중 오류 발생", e);
         }
-
 
     }
 
