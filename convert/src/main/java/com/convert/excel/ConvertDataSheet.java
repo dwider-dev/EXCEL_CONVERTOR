@@ -9,6 +9,7 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -81,6 +82,7 @@ public class ConvertDataSheet {
 
             3. 첫 Row(Title) 별도 분리 및 기록
 
+
             4. 나머지 Row Data 입력
 
              */
@@ -100,46 +102,48 @@ public class ConvertDataSheet {
                 return;
             }
 
+            rows = new ArrayList<Object[]>();
 
             // Read row data
-
             // rows
-            for(int i = 1 ; i < rowLength ; i ++){
+            for(int i = 1 ; i < rowLength - 1; i ++){
                 row = sheet.getRow(i);
 
-                rows = new ArrayList<Object[]>();
                 Object celObj[] = new Object[columnLength];
 
                 // cols
                 for(int j = 0 ; j < columnLength ; j++){
-                    XSSFCell cell = row.getCell(j);
-                    switch(cell.getCellType()) {   // 각셀의 데이터값을 가져올때 맞는 데이터형으로 변환한다.
-                        case HSSFCell.CELL_TYPE_FORMULA:
-                            String strValFormula = cell.getCellFormula();
-                            celObj[j] = strValFormula;
-                            break;
-                        case HSSFCell.CELL_TYPE_NUMERIC:
-                            Integer intVal = Integer.parseInt(String.format("%d", cell.getNumericCellValue()));
-                            celObj[j] = intVal;
-                            break;
-                        case HSSFCell.CELL_TYPE_STRING:
-                            String strVal = cell.getStringCellValue();
-                            celObj[j] = strVal;
-                            break;
-                        case HSSFCell.CELL_TYPE_BLANK:
-                            String strValBlank = "";
-                            celObj[j] = strValBlank;
-                            break;
-                        case HSSFCell.CELL_TYPE_ERROR:
-                            String strValError = String.valueOf(cell.getErrorCellValue());
-                            celObj[j] = strValError;
-                            break;
-                        default:
+                    if (row == null) {
+
+                    }else {
+                        XSSFCell cell = row.getCell(j);
+                        switch(cell.getCellType()) {   // 각셀의 데이터값을 가져올때 맞는 데이터형으로 변환한다.
+                            case HSSFCell.CELL_TYPE_FORMULA:
+                                String strValFormula = cell.getCellFormula();
+                                celObj[j] = strValFormula;
+                                break;
+                            case HSSFCell.CELL_TYPE_NUMERIC:
+                                Integer intVal = Integer.parseInt(String.format("%d", cell.getNumericCellValue()));
+                                celObj[j] = intVal;
+                                break;
+                            case HSSFCell.CELL_TYPE_STRING:
+                                String strVal = cell.getStringCellValue();
+                                celObj[j] = strVal;
+                                break;
+                            case HSSFCell.CELL_TYPE_BLANK:
+                                String strValBlank = "";
+                                celObj[j] = strValBlank;
+                                break;
+                            case HSSFCell.CELL_TYPE_ERROR:
+                                String strValError = String.valueOf(cell.getErrorCellValue());
+                                celObj[j] = strValError;
+                                break;
+                            default:
+                        }
+                        rows.add(celObj);
                     }
                 }
                 // cols read end
-
-                rows.add(celObj);
                 // modify new data size
                 rowLength = rows.size();
             }
@@ -164,15 +168,14 @@ public class ConvertDataSheet {
         String[] columnData = new String[targets.length];
 
         // 타겟별 설정값 Load
-        for(int i = 0 ; i < targets.length ; i++){
+        for (int i = 0; i < targets.length; i++) {
             outputFileName[i] = ReadProperties.getProperty(targets[i] + "_OUTPUT_FILE_NAME");
             stdValue[i] = ReadProperties.getProperty(targets[i] + "_OUTPUT_STD_VALUE");
             columnData[i] = ReadProperties.getProperty(targets[i] + "_OUTPUT_COLUMN_DATA");
         }
 
-
         // read row
-        for(int i = 0 ; i < rowLength ; i++){
+        for (int i = 0; i < rowLength; i++) {
             row = rows.get(i);
 
             /*
@@ -182,26 +185,21 @@ public class ConvertDataSheet {
              */
 
             // read column
-            for(int j = 0 ; j < targets.length ; j++){
-                if(equalIndex(columnTitle, row, stdValue[j])){
-
-                    log.debug("[" + j + "] " + stdValue[j] + " - 분류 - OUTPUT - " +  outputFileName[j]);
-                    Object[] convertRow =  procRow(row, columnData[j], outputFileName[j]);
+            for (int j = 0; j < targets.length; j++) {
+                if (equalIndex(columnTitle, row, stdValue[j])) {
+                    log.debug("[" + j + "] " + stdValue[j] + " - 분류 - OUTPUT - " + outputFileName[j]);
+                    Object[] convertRow = procRow(row, columnData[j], outputFileName[j]);
 
                     // 오류 발생 시 중단
-                    if(convertRow == null){
+                    if (convertRow == null) {
                         return;
                     }
 
                     convertRows.add(convertRow);
                     log.debug("처리 완료 => " + convertRow);
-
-
                 }
-            }// column end
-
-        }// row end
-
+            } // column end
+        } // row end
     }
 
 
@@ -215,15 +213,19 @@ public class ConvertDataSheet {
      * @return
      */
     private boolean equalIndex(String[] column, Object[] row, String value){
+        if(value == null){
+            return false;
+        }
         String strVal[] = value.split(":");
-
-        for(int i = 0 ; i < columnLength ; i++){
-            // 컬럼명 : 컬럼값 일치하는 Row 인지 검증
-            if(column[i].equals(strVal[0]) && String.valueOf(row[i]).equals(strVal[1])){
-                return true;
+        for (int i = 0; i < columnLength; i++) {
+            if(column[i].equals(strVal[0])){
+                for (int j = 0; j < row.length; j++) {
+                    if(String.valueOf(row[j]).equals(strVal[1])){
+                        return true;
+                    }
+                }
             }
         }
-
 
         return false;
     }
@@ -446,48 +448,46 @@ public class ConvertDataSheet {
      */
     private void writeFile(Object[] row, String[] outColumns, File file){
         try {
-            XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(file));
+            XSSFWorkbook workbook;
             XSSFSheet outputSheet;
 
-            if(workbook.getNumberOfSheets() <= 0){
-                log.debug("New file : " + file.getName());
-                outputSheet = workbook.createSheet();
-            } else{
+            if (file.exists()) {
+                // If the file already exists, open it and get the existing workbook and sheet
+                FileInputStream fis = new FileInputStream(file);
+                workbook = new XSSFWorkbook(fis);
                 outputSheet = workbook.getSheetAt(0);
+            } else {
+                // If the file doesn't exist, create a new workbook and sheet
+                workbook = new XSSFWorkbook();
+                outputSheet = workbook.createSheet();
             }
 
             int outFileRowCnt = outputSheet.getPhysicalNumberOfRows();
 
             // Write titles
-            if(outFileRowCnt <= 0){
-
-                // Write titles
-                // Write to first row
+            if (outFileRowCnt <= 0) {
+                // Write titles to the first row
                 XSSFRow titleRow = outputSheet.createRow(0);
-
-                for(int i = 0 ; i < outColumns.length ; i++){
+                for (int i = 0; i < outColumns.length; i++) {
                     Object cellData = outColumns[i];
                     XSSFCell cell = titleRow.createCell(i);
-
                     cell.setCellValue(String.valueOf(cellData));
-
                 }
                 outFileRowCnt++;
-
-            }// End write titles
+            }
 
             // Write row data
-            for(int i = 0 ; i < row.length ; i++){
+            XSSFRow writeRow = outputSheet.createRow(outFileRowCnt);
+            for (int i = 0; i < row.length; i++) {
                 Object cellData = row[i];
-                XSSFRow writeRow = outputSheet.createRow(outFileRowCnt);
                 XSSFCell cell = writeRow.createCell(i);
 
                 // Numbering 기능 사용시 값 치환
-                if(cellData.equals(OPT_NUMBERING)){
+                if (cellData.equals(OPT_NUMBERING)) {
                     cellData = outFileRowCnt;
                 }
 
-                if(cellData instanceof String){
+                if (cellData instanceof String) {
                     cell.setCellValue(String.valueOf(cellData));
                 } else if (cellData instanceof Integer) {
                     cell.setCellValue(Integer.parseInt(String.valueOf(cellData)));
@@ -495,17 +495,18 @@ public class ConvertDataSheet {
                     cell.setCellValue(Double.parseDouble(String.valueOf(cellData)));
                 } else if (cellData instanceof Float) {
                     cell.setCellValue(Float.parseFloat(String.valueOf(cellData)));
-                } else{
+                } else {
                     cell.setCellValue(String.valueOf(cellData));
                 }
-
             }
-            // End write row data
+            outFileRowCnt++;
 
-            workbook.write(new FileOutputStream(file));
+            // Write the workbook to the file
+            FileOutputStream fos = new FileOutputStream(file);
+            workbook.write(fos);
+            fos.close();
 
-
-
+            // Close the workbook
         } catch (IOException e) {
             log.error("File 기록 중 오류 발생", e);
         }
