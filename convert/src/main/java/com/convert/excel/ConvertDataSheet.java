@@ -12,6 +12,7 @@ import java.awt.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
+import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -45,6 +46,7 @@ public class ConvertDataSheet {
     # $DATE_YYYYMMDD : 원본 엑셀의 날짜필드를 YYYY-MM-DD 형식으로 바꿔서 날짜를 입력해준다.
     # $NOTE_CONVERT_CARNUM : 차량번호를 적요에서 찾아 입력해준다.
     # $NOTE_CONVERT_CARNAME : 차량명으로 예측되는 문자열을 찾아 입력해준다.
+    # $NOTE_CONVERT_CARNUM_NAME : 차량명 + 차량번호를 적요에서 찾아 입력해준다.(/로 둘을 합친다)
     # $NOTE_CONVERT_OIL : 주유비를 찾아 입력해준다.
     # $NOTE_CONVERT_INS : 보험료를 찾아 입력해준다.
     # $NOTE_CONVERT_PAR : 주차비를 찾아 입력해준다.
@@ -54,14 +56,20 @@ public class ConvertDataSheet {
     private final String OPT_NONE = "$NONE";
     private final String OPT_NUMBERING = "$NUMBERING";
     private final String OPT_STRING = "$STRING";
+    private final String OPT_ADRESS = "$ADDRESS";
+    private final String OPT_CUST_NAME = "$CUST_NAME";
+    private final String OPT_DRIVER_NAME = "$DRIVER_NAME";
     private final String OPT_DATE_MMDD = "$DATE_MMDD";
     private final String OPT_DATE_YYYYMMDD = "$DATE_YYYYMMDD";
     private final String OPT_NOTE_CONVERT_CARNUM = "$NOTE_CONVERT_CARNUM";
     private final String OPT_NOTE_CONVERT_CARNAME = "$NOTE_CONVERT_CARNAME";
+    private final String OPT_NOTE_CONVERT_CARNUM_NAME = "$NOTE_CONVERT_CARNUM_NAME";
     private final String OPT_NOTE_CONVERT_OIL = "$NOTE_CONVERT_OIL";
     private final String OPT_NOTE_CONVERT_INS = "$NOTE_CONVERT_INS";
     private final String OPT_NOTE_CONVERT_PAR = "$NOTE_CONVERT_PAR";
-    private final String OPT_NOTE_CONVERT_OIL_INS_PAR = "$NOTE_CONVERT_OIL_INS_PAR";
+    private final String OPT_NOTE_CONVERT_OIL_INS_PAR = "$NOTE_CONVERT_OIL_INS_PAR_CANCEL";
+    private final String OPT_NOTE_CONVERT_WIP="$NOTE_CONVERT_WIP";
+    private final String OPT_SUM_VAT="$SUM_VAT";
 
     /**
      * 생성자 : 엑셀파일을 읽어 메모리에 저장한다.
@@ -294,7 +302,17 @@ public class ConvertDataSheet {
                     break;
                 case OPT_STRING:
                     // 원본 엑셀에서 가져온 데이터를 그대로 입력한다.
+                    targetValue = targetValue == null ? "" : targetValue;
                     output = targetValue;
+                    break;
+                case OPT_ADRESS:
+                    output = transAddress(String.valueOf(targetValue));
+                    break;
+                case OPT_CUST_NAME:
+                    output = transCustName(String.valueOf(targetValue));
+                    break;
+                case OPT_DRIVER_NAME:
+                    output = transDriverName(String.valueOf(targetValue));
                     break;
                 case OPT_DATE_MMDD:
                     output = transDate(String.valueOf(targetValue), "MM/dd");
@@ -308,13 +326,26 @@ public class ConvertDataSheet {
                 case OPT_NOTE_CONVERT_CARNAME:
                     output = findCarName(String.valueOf(targetValue));
                     break;
+                case OPT_NOTE_CONVERT_CARNUM_NAME :
+                    output = findCarName(String.valueOf(targetValue)) + "/" + findCarNum(String.valueOf(targetValue));
+                    break;
+                case OPT_NOTE_CONVERT_WIP:
+                    output = findWIP(String.valueOf(targetValue));
+                    break;
                 case OPT_NOTE_CONVERT_OIL:
+                    output = findOil(String.valueOf(targetValue));
                     break;
                 case OPT_NOTE_CONVERT_INS:
+                    output = findIns(String.valueOf(targetValue));
                     break;
                 case OPT_NOTE_CONVERT_PAR:
+                    output = findPark(String.valueOf(targetValue));
                     break;
                 case OPT_NOTE_CONVERT_OIL_INS_PAR:
+                    output = findOilInsPark(String.valueOf(targetValue));
+                    break;
+                case OPT_SUM_VAT:
+                    output = sumVat(String.valueOf(targetValue));
                     break;
                 default:
                     break;
@@ -336,6 +367,66 @@ public class ConvertDataSheet {
 
 
         return procRow;
+    }
+
+    /**
+     * 기능 옵션 : $ADRESS
+     * <br>
+     * 원본 데이터에서 주소지만 출력한다 ( ']'앞의 시각 , 톨포등 주소가 아닌 문자열 제거)
+     * @param data
+     *
+     * */
+    private String transAddress(String data){
+            String tempStr = data;
+            String pattern = ".*?]";
+            Pattern regex = Pattern.compile(pattern);
+            Matcher matcher = regex.matcher(tempStr);
+
+            tempStr = matcher.replaceAll("");
+
+            //점, 쉼표, <>, 띄어쓰기, - 를 제외한 모든 특수기호 삭제
+            String pattern2 = "[^\\p{L}\\p{N}\\s,.<>-]+";
+            Pattern regex2 = Pattern.compile(pattern2);
+            Matcher matcher2 = regex.matcher(tempStr);
+
+            String output = matcher2.replaceAll("");
+
+        return output;
+    }
+
+    /**
+     * 기능 옵션 : $CUST_NAME
+     * <br>
+     * 원본 데이터에서 '회사명/이름/직위' 로 되어있는 형태를 구분한다.
+     * @param data
+     *
+     * */
+    private String transCustName(String data){
+        String tempStr = data;
+
+        String pattern = "(?<=/)[가-힣]+";
+        Pattern regex = Pattern.compile(pattern);
+        Matcher matcher = regex.matcher(tempStr);
+
+        while (matcher.find()) {
+            String name = matcher.group();
+            return name;
+        }
+        return "";
+    }
+    private String transDriverName(String data){
+        // 괄호와 괄호 안의 값을 제거
+        String pattern = "\\([^()]*\\)";
+        Pattern regex = Pattern.compile(pattern);
+        Matcher matcher = regex.matcher(data);
+        while (matcher.find()) {
+            data = data.replace(matcher.group(), "");
+        }
+
+        // 점('.')을 제거
+        data = data.replace(".", "");
+
+        return data.trim();
     }
 
     /**
@@ -392,8 +483,6 @@ public class ConvertDataSheet {
      */
     private String findCarName(String data) {
         String tempStr = data;
-
-
         // 전화번호 제거
         Pattern pattern = Pattern.compile("(\\d{3}.\\d{4}.\\d{4})");
         Matcher matcher = pattern.matcher(tempStr);
@@ -433,12 +522,79 @@ public class ConvertDataSheet {
 
         tempStr = tempStr.replaceAll("/", "");
 
+        // WIP와 숫자 제거
+        String wipReomve = "(?:^|/)W[^/]*|/WIP[^/]*|/[^/]*$";
+        tempStr = tempStr.replaceAll(wipReomve, "");
+
         return tempStr.trim();
     }
     private String findOil(String data){
-            
+        data = data == "null" ? "0" : data;
+        return data;
+    }
+
+    private String findIns(String data){
+        data = data == "null" ? "0" : data;
+        return data;
+    }
+
+    private String findPark(String data){
+        data = data == "null" ? "0" : data;
+        return data;
+    }
+
+    private String findOilInsPark(String data){
+        String tempStr = data;
+        Pattern pattern = Pattern.compile("/(주|보|주차|주유|보험)\\d+\\.\\d|취소비");
+        Matcher matcher = pattern.matcher(tempStr);
+
+        StringBuilder output = new StringBuilder();
+
+        while (matcher.find()) {
+            output.append(matcher.group()).append("/");
+        }
+
+        if (output.length() > 0) {
+            output.deleteCharAt(output.length() - 1); // 마지막 '/' 제거
+        }
+
+        String result = output.toString();
+        if (!result.isEmpty()) {
+            return result;
+        }
         return "";
     }
+
+    private String sumVat(String data) {
+        if (data != null && !data.equalsIgnoreCase("null")) {
+            data = data.replace(",", ""); // 쉼표(,) 제거
+            int tempStr = Integer.parseInt(data);
+            tempStr = (int) (tempStr * 1.1);
+
+            DecimalFormat decimalFormat = new DecimalFormat("#,###");
+            String formattedResult = decimalFormat.format(tempStr);
+
+            return formattedResult;
+        }
+        return "";
+    }
+
+    private String findWIP(String data){
+        String tempStr = data;
+        String pattern = "(?:^|/)(?:WIP:|W )?(\\d+).*|.*?(\\d+)$";
+        Pattern regex = Pattern.compile(pattern);
+        Matcher matcher = regex.matcher(data);
+
+        if (matcher.find()) {
+            if (matcher.group(1) != null) {
+                return matcher.group(1);
+            } else if (matcher.group(2) != null) {
+                return matcher.group(2);
+            }
+        }
+        return "";
+    }
+
 
     /**
      * 파일을 생성하고 변환된 Row를 기록한다.
