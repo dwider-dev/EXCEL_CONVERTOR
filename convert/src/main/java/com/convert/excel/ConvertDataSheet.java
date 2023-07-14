@@ -15,9 +15,7 @@ import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
+import java.util.*;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,8 +27,9 @@ import java.util.regex.Pattern;
 public class ConvertDataSheet {
     private static Logger log = new Logger().getLogger(ConvertDataSheet.class);
 
-    private List<Object[]> rows;
-    private List<Object[]> convertRows;
+    private ArrayList<Object[]> rows;
+    private LinkedList<Object[]> convertRows;
+    private ArrayList<Object[]> unProcessRows;
     private String[] columnTitle;
 
     private int columnLength;
@@ -79,7 +78,7 @@ public class ConvertDataSheet {
         columnLength  = 0;
         rowLength = 0;
 
-        convertRows = new ArrayList<Object[]>(); // 수정된 부분
+        convertRows = new LinkedList<Object[]>(); // 수정된 부분
         rows = new ArrayList<Object[]>();
 
         try {
@@ -162,16 +161,20 @@ public class ConvertDataSheet {
     public int getRowLength(){
         return rowLength;
     }
-
+    public ArrayList<Object[]> getUnprocessedRows() {
+        return unProcessRows;
+    }
     /**
      * 읽어들인 파일의 전체 Row 를 분석 및 변환 한다.
      */
     public void convertRow(){
-        System.out.println("convertRow");
         String[] targets = ReadProperties.getProperty("DISTRIBUTE_TARGETS").split(",");
         String[] outputFileName = new String[targets.length];
         String[] stdValue = new String[targets.length];
         String[] columnData = new String[targets.length];
+        unProcessRows = new ArrayList<>();
+
+        boolean processed = false; // 데이터가 처리되었는지 여부를 나타내는 플래그
 
         // 타겟별 설정값 Load
         for (int i = 0; i < targets.length; i++) {
@@ -180,8 +183,6 @@ public class ConvertDataSheet {
             columnData[i] = ReadProperties.getProperty(targets[i] + "_OUTPUT_COLUMN_DATA");
         }
         // read row
-        System.out.println(rowLength);
-        System.out.println(targets.length);
         for (int i = 0; i < rowLength; i++) {
             Object[] row = rows.get(i);
 
@@ -199,12 +200,16 @@ public class ConvertDataSheet {
 
                     convertRows.add(convertRow);
                     log.debug("처리 완료 => " + convertRow);
+                    processed = true;
+                    break;
+                }
+                if(!processed){
+                    unProcessRows.add(row);
                 }
             } // column end
         } // row end
-
+        writeUnprocessedRowsToFile();
     }
-
 
     /**
      * 원본 엑셀의 컬럼명과 데이터가 분류기준에 부합하는 값인지 체크
@@ -364,9 +369,7 @@ public class ConvertDataSheet {
 
         // Write file
         writeFile(procRow, outColumns, new File(ReadProperties.getProperty("OUTPUT_EXCEL_PATH") + "/" + outFile));
-
-
-        return procRow;
+        return null;
     }
 
     /**
@@ -508,7 +511,7 @@ public class ConvertDataSheet {
         }
 
         // 예약 문구 제거
-        String[] expectStrs = {"출발", "도착", "반차", "핸들", "주차", "주유", "픽업", "청불", "보험", "경유", "전달"};
+        String[] expectStrs = {"출발", "도착", "반차", "핸들", "주차", "주유", "픽업", "청불", "보험", "경유", "전달","W", "w"};
 
         for(String expect : expectStrs){
 
@@ -519,12 +522,11 @@ public class ConvertDataSheet {
             }
 
         }
-
-        tempStr = tempStr.replaceAll("/", "");
-
         // WIP와 숫자 제거
-        String wipReomve = "(?:^|/)W[^/]*|/WIP[^/]*|/[^/]*$";
-        tempStr = tempStr.replaceAll(wipReomve, "");
+/*
+        tempStr = tempStr.replaceAll("^/W.*?(/|$)", "");
+*/
+        tempStr = tempStr.replaceAll("/", "");
 
         return tempStr.trim();
     }
@@ -579,18 +581,16 @@ public class ConvertDataSheet {
         return "";
     }
 
-    private String findWIP(String data){
-        String tempStr = data;
-        String pattern = "(?:^|/)(?:WIP:|W )?(\\d+).*|.*?(\\d+)$";
+    private static String findWIP(String data) {
+        data = data.replaceAll("\\s", "");
+        String pattern = "/[Ww]\\S*?(\\d+)(?:(?:\\s|:|$)|(?=/))";
         Pattern regex = Pattern.compile(pattern);
         Matcher matcher = regex.matcher(data);
 
         if (matcher.find()) {
-            if (matcher.group(1) != null) {
-                return matcher.group(1);
-            } else if (matcher.group(2) != null) {
-                return matcher.group(2);
-            }
+            String matchStr = matcher.group(1);
+            String extractedNumber = matchStr.replaceAll("[^\\d]", "");
+            return extractedNumber;
         }
         return "";
     }
@@ -669,9 +669,38 @@ public class ConvertDataSheet {
 
     }
 
+    /**
+     * 처리되지 않은 엑셀 데이터를 파일로 저장한다.
+     */
+    private void writeUnprocessedRowsToFile() {
+        try {
+            String filePath = ReadProperties.getProperty("OUTPUT_EXCEL_PATH");
+            String fileName = "미처리_내역.xlsx";
+            File file = new File(filePath + "/" + fileName);
 
+            XSSFWorkbook workbook = new XSSFWorkbook();
+            XSSFSheet sheet = workbook.createSheet();
 
-    public static void main(String args[]){
+            int rowIdx = 0;
+            for (int i = 0; i < unProcessRows.size(); i++) {
+                Object[] row = unProcessRows.get(i);
+                XSSFRow excelRow = sheet.createRow(rowIdx++);
+                for (int j = 0; j < columnLength; j++) {
+                    XSSFCell cell = excelRow.createCell(j);
+                    Object cellData = row[j];
+                    if (cellData != null) {
+                        cell.setCellValue(String.valueOf(cellData));
+                    }
+                }
+            }
+            FileOutputStream fos = new FileOutputStream(file);
+            workbook.write(fos);
+            fos.close();
+
+        } catch (IOException e) {
+            log.error("Failed to write unprocessed rows to file", e);
+        }
     }
+
 
 }
