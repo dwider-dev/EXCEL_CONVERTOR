@@ -69,6 +69,7 @@ public class ConvertDataSheet {
     private final String OPT_NOTE_CONVERT_OIL_INS_PAR = "$NOTE_CONVERT_OIL_INS_PAR_CANCEL";
     private final String OPT_NOTE_CONVERT_WIP="$NOTE_CONVERT_WIP";
     private final String OPT_SUM_VAT="$SUM_VAT";
+    private final String OPT_VAT="$VAT";
 
     /**
      * 생성자 : 엑셀파일을 읽어 메모리에 저장한다.
@@ -131,7 +132,8 @@ public class ConvertDataSheet {
                                 celObj[j] = strValFormula;
                                 break;
                             case HSSFCell.CELL_TYPE_NUMERIC:
-                                Integer intVal = Integer.parseInt(String.format("%d", cell.getNumericCellValue()));
+                                double numericValue = cell.getNumericCellValue();
+                                int intVal = (int) numericValue;
                                 celObj[j] = intVal;
                                 break;
                             case HSSFCell.CELL_TYPE_STRING:
@@ -174,8 +176,6 @@ public class ConvertDataSheet {
         String[] columnData = new String[targets.length];
         unProcessRows = new ArrayList<>();
 
-        boolean processed = false; // 데이터가 처리되었는지 여부를 나타내는 플래그
-
         // 타겟별 설정값 Load
         for (int i = 0; i < targets.length; i++) {
             outputFileName[i] = ReadProperties.getProperty(targets[i] + "_OUTPUT_FILE_NAME");
@@ -193,6 +193,7 @@ public class ConvertDataSheet {
              */
 
             // read column
+            boolean processed = false; // 각 행의 처리 여부를 나타내는 플래그
             for (int j = 0; j < targets.length; j++) {
                 if (equalIndex(columnTitle, row, stdValue[j])) {
                     log.debug("[" + j + "] " + stdValue[j] + " - 분류 - OUTPUT - " + outputFileName[j]);
@@ -203,10 +204,11 @@ public class ConvertDataSheet {
                     processed = true;
                     break;
                 }
-                if(!processed){
-                    unProcessRows.add(row);
-                }
+
             } // column end
+            if (!processed) {
+                unProcessRows.add(row);
+            }
         } // row end
         writeUnprocessedRowsToFile();
     }
@@ -352,6 +354,9 @@ public class ConvertDataSheet {
                 case OPT_SUM_VAT:
                     output = sumVat(String.valueOf(targetValue));
                     break;
+                case OPT_VAT:
+                    output = getVat(String.valueOf(targetValue));
+                    break;
                 default:
                     break;
             }
@@ -380,7 +385,18 @@ public class ConvertDataSheet {
      *
      * */
     private String transAddress(String data){
-            String tempStr = data;
+
+        String step1 = data.replace("즉후/탁/", "");
+        String step2 = step1.replaceAll("@톨포\\]", "");
+
+        // Step 3: Remove '@'
+        String step3 = step2.replaceAll("@", "");
+
+        // Step 4: Remove ']' and preceding characters
+        String step4 = step3.replaceAll(".*?\\]", "");
+/*
+
+        String tempStr = data;
             String pattern = ".*?]";
             Pattern regex = Pattern.compile(pattern);
             Matcher matcher = regex.matcher(tempStr);
@@ -392,9 +408,8 @@ public class ConvertDataSheet {
             Pattern regex2 = Pattern.compile(pattern2);
             Matcher matcher2 = regex.matcher(tempStr);
 
-            String output = matcher2.replaceAll("");
-
-        return output;
+            String output = matcher2.replaceAll("");*/
+        return step4;
     }
 
     /**
@@ -487,6 +502,7 @@ public class ConvertDataSheet {
     private String findCarName(String data) {
         String tempStr = data;
         // 전화번호 제거
+/*
         Pattern pattern = Pattern.compile("(\\d{3}.\\d{4}.\\d{4})");
         Matcher matcher = pattern.matcher(tempStr);
 
@@ -511,38 +527,86 @@ public class ConvertDataSheet {
         }
 
         // 예약 문구 제거
-        String[] expectStrs = {"출발", "도착", "반차", "핸들", "주차", "주유", "픽업", "청불", "보험", "경유", "전달","W", "w"};
+        String[] expectStrs = {"출발", "도착", "반차", "핸들", "주차", "주유", "픽업", "청불", "보험", "경유", "전달", "W", "w", "신청자","종료"};
 
-        for(String expect : expectStrs){
+        for (String expect : expectStrs) {
+            int indexOfExpect = tempStr.indexOf(expect);
 
-            if(tempStr.indexOf(expect) >= 0){
-                String tempRm = tempStr.substring(tempStr.indexOf(expect));
-                tempRm = tempRm.substring(0, tempRm.indexOf("/") >= 0 ? tempRm.indexOf("/") : tempRm.length());
+            while (indexOfExpect >= 0) {
+                String tempRm = tempStr.substring(indexOfExpect);
+
+                int nextSlashIndex = tempRm.indexOf("/");
+                int nextBraceIndex = tempRm.indexOf("{");
+                int endIndex = Math.min(nextSlashIndex >= 0 ? nextSlashIndex : tempRm.length(), nextBraceIndex >= 0 ? nextBraceIndex : tempRm.length());
+
+                tempRm = tempRm.substring(0, endIndex);
+                tempStr = tempStr.replaceAll("[^a-zA-Z0-9가-힣\\s]", "");
                 tempStr = tempStr.replaceAll(tempRm, "");
-            }
 
+                indexOfExpect = tempStr.indexOf(expect, indexOfExpect + 1);
+            }
         }
         // WIP와 숫자 제거
+*/
 /*
         tempStr = tempStr.replaceAll("^/W.*?(/|$)", "");
-*/
-        tempStr = tempStr.replaceAll("/", "");
+*//*
 
-        return tempStr.trim();
+        tempStr = tempStr.replaceAll("/", "");
+*/
+
+        Pattern carModelPattern = Pattern.compile("[가-힣a-zA-Z0-9]+"); // 차종을 추측할 수 있는 패턴
+        Pattern vehicleNumberPattern = Pattern.compile("^[0-9가-힣]*[0-9]+[가-힣]*$"); // 차량 번호 패턴 (전체 문자열이 차량 번호와 일치해야 함)
+        Matcher matcher = carModelPattern.matcher(data);
+
+            while (matcher.find()) {
+                String carModel = matcher.group();
+
+                Matcher vehicleNumberMatcher = vehicleNumberPattern.matcher(carModel);
+                if (!vehicleNumberMatcher.matches()) {
+                    return carModel;
+                }
+
+        }
+        return "";
     }
     private String findOil(String data){
-        data = data == "null" ? "0" : data;
-        return data;
+        Pattern pattern = Pattern.compile("(주|보|주차|주유|보험)(\\d+\\.\\d+)");
+        Matcher matcher = pattern.matcher(data);
+        int intValue = 0;
+        if (matcher.find()) {
+            String label = matcher.group(1);
+            double value = Double.parseDouble(matcher.group(2));
+
+            intValue = (int) (value * 10000); // 값을 10000 곱해서 정수로 변환
+        }
+        return String.valueOf(intValue);
     }
 
     private String findIns(String data){
-        data = data == "null" ? "0" : data;
-        return data;
+        Pattern pattern = Pattern.compile("(주|보|주차|주유|보험)(\\d+\\.\\d+)");
+        Matcher matcher = pattern.matcher(data);
+        int intValue = 0;
+        if (matcher.find()) {
+            String label = matcher.group(1);
+            double value = Double.parseDouble(matcher.group(2));
+
+            intValue = (int) (value * 10000); // 값을 10000 곱해서 정수로 변환
+        }
+        return String.valueOf(intValue);
     }
 
     private String findPark(String data){
-        data = data == "null" ? "0" : data;
-        return data;
+        Pattern pattern = Pattern.compile("(주|보|주차|주유|보험)(\\d+\\.\\d+)");
+        Matcher matcher = pattern.matcher(data);
+        int intValue = 0;
+        if (matcher.find()) {
+            String label = matcher.group(1);
+            double value = Double.parseDouble(matcher.group(2));
+
+            intValue = (int) (value * 10000); // 값을 10000 곱해서 정수로 변환
+        }
+        return String.valueOf(intValue);
     }
 
     private String findOilInsPark(String data){
@@ -572,7 +636,6 @@ public class ConvertDataSheet {
             data = data.replace(",", ""); // 쉼표(,) 제거
             int tempStr = Integer.parseInt(data);
             tempStr = (int) (tempStr * 1.1);
-
             DecimalFormat decimalFormat = new DecimalFormat("#,###");
             String formattedResult = decimalFormat.format(tempStr);
 
@@ -581,6 +644,19 @@ public class ConvertDataSheet {
         return "";
     }
 
+    private String getVat(String data) {
+        if (data != null && !data.equalsIgnoreCase("null")) {
+            data = data.replace(",", ""); // 쉼표(,) 제거
+            int tempStr = Integer.parseInt(data);
+            tempStr = (int) (tempStr * 0.1);
+
+            DecimalFormat decimalFormat = new DecimalFormat("#,###");
+            String formattedResult = decimalFormat.format(tempStr);
+
+            return formattedResult;
+        }
+        return "";
+    }
     private static String findWIP(String data) {
         data = data.replaceAll("\\s", "");
         String pattern = "/[Ww]\\S*?(\\d+)(?:(?:\\s|:|$)|(?=/))";

@@ -24,6 +24,7 @@ public class ExcelReader {
     private static List<File> excelList;
 
     public ExcelReader(){
+        System.out.println(ReadProperties.getProperty("INPUT_EXCEL_PATH"));
         INPUT_EXCEL_PATH = INPUT_EXCEL_PATH == null ? ReadProperties.getProperty("INPUT_EXCEL_PATH") : INPUT_EXCEL_PATH;
         EXCEL_POST_FIX   = EXCEL_POST_FIX   == null ? ReadProperties.getProperty("EXCEL_POST_FIX")   : EXCEL_POST_FIX;
 
